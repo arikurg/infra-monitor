@@ -1,0 +1,72 @@
+---
+# ansible/roles/database/tasks/main.yml
+# Installs PostgreSQL and creates the application database and user
+
+- name: Install PostgreSQL
+  ansible.builtin.dnf:
+    name:
+      - postgresql15-server
+      - postgresql15
+      - python3-psycopg2    # needed by Ansible's postgresql_* modules
+    state: present
+
+- name: Initialise the PostgreSQL database cluster
+  ansible.builtin.command: postgresql-setup --initdb
+  args:
+    creates: /var/lib/pgsql/data/pg_hba.conf   # skip if already done
+
+- name: Configure PostgreSQL to listen on all interfaces
+  ansible.builtin.lineinfile:
+    path: /var/lib/pgsql/data/postgresql.conf
+    regexp: "^#?listen_addresses"
+    line: "listen_addresses = '*'"
+  notify: Restart PostgreSQL
+
+- name: Configure pg_hba.conf to use md5 auth for app connections
+  ansible.builtin.lineinfile:
+    path: /var/lib/pgsql/data/pg_hba.conf
+    insertafter: "^# IPv4 local connections"
+    line: "host    appdb           appuser         10.0.1.0/24             md5"
+  notify: Restart PostgreSQL
+
+- name: Start and enable PostgreSQL
+  ansible.builtin.service:
+    name: postgresql
+    state: started
+    enabled: true
+
+- name: Create application database
+  community.postgresql.postgresql_db:
+    name: appdb
+    state: present
+  become_user: postgres
+
+- name: Create application database user
+  community.postgresql.postgresql_user:
+    name: appuser
+    password: "{{ db_password }}"
+    state: present
+  become_user: postgres
+
+- name: Grant appuser all privileges on appdb
+  community.postgresql.postgresql_privs:
+    db: appdb
+    role: appuser
+    type: database
+    privs: ALL
+    state: present
+  become_user: postgres
+
+- name: Create incidents table (status history log)
+  community.postgresql.postgresql_query:
+    db: appdb
+    query: |
+      CREATE TABLE IF NOT EXISTS incidents (
+        id          SERIAL PRIMARY KEY,
+        service     VARCHAR(50)  NOT NULL,
+        status      VARCHAR(20)  NOT NULL,
+        latency_ms  INTEGER,
+        detail      TEXT,
+        checked_at  TIMESTAMPTZ  DEFAULT NOW()
+      );
+  become_user: postgres

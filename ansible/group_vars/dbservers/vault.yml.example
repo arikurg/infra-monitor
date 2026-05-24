@@ -1,0 +1,16 @@
+# ansible/group_vars/dbservers/vault.yml
+#
+# This file is ENCRYPTED with ansible-vault — never commit plaintext secrets.
+#
+# To create it:
+#   ansible-vault create ansible/group_vars/dbservers/vault.yml
+#
+# To edit it later:
+#   ansible-vault edit ansible/group_vars/dbservers/vault.yml
+#
+# To run a playbook with it:
+#   ansible-playbook -i inventory.ini playbook.yml --ask-vault-pass
+#
+# Contents (what you type inside vault edit):
+---
+db_password: "ChangeMe_UseA_StrongPassword123!"

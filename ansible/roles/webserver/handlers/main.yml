@@ -1,0 +1,8 @@
+---
+# ansible/roles/webserver/handlers/main.yml
+# Handlers run once at the end of a play, only when notified
+
+- name: Reload Nginx
+  ansible.builtin.service:
+    name: nginx
+    state: reloaded

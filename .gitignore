@@ -1,0 +1,27 @@
+# Terraform
+terraform/.terraform/
+terraform/.terraform.lock.hcl
+terraform/terraform.tfstate
+terraform/terraform.tfstate.backup
+terraform/terraform.tfvars       # contains your real IP — never commit
+*.tfplan
+
+# Ansible
+ansible/inventory.ini            # contains real IPs — never commit
+ansible/group_vars/dbservers/vault.yml   # encrypted secrets file
+ansible/*.retry
+ansible/__pycache__/
+
+# SSH keys
+*.pem
+*.key
+id_rsa
+id_ed25519
+
+# OS
+.DS_Store
+Thumbs.db
+ansible/group_vars/all/vault.yml
+ansible/group_vars/vars.yml
+ansible/group_vars/dbservers/valut.yml
+*.bak

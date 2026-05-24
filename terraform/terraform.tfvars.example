@@ -1,0 +1,18 @@
+# Copy this file to terraform.tfvars and fill in your values:
+#   cp terraform.tfvars.example terraform.tfvars
+#
+# terraform.tfvars is gitignored — never commit real values.
+
+aws_region   = "us-east-1"
+project_name = "infra-learning"
+environment  = "dev"
+
+# Your AWS key pair name (must already exist in AWS)
+# Create one: aws ec2 create-key-pair --key-name infra-learning \
+#   --query 'KeyMaterial' --output text > ~/.ssh/infra-learning.pem
+# chmod 400 ~/.ssh/infra-learning.pem
+key_pair_name = "infra-learning"
+
+# Your public IP address (run: curl ifconfig.me)
+# The /32 means "just this one IP"
+your_ip = "YOUR_IP_HERE/32"

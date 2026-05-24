@@ -1,0 +1,85 @@
+---
+# ansible/roles/appserver/tasks/main.yml
+# Installs Node.js and deploys a simple Express API
+
+- name: Install Node.js via NodeSource repo
+  ansible.builtin.shell: |
+    curl -fsSL https://rpm.nodesource.com/setup_20.x | bash -
+  args:
+    creates: /etc/yum.repos.d/nodesource-el9.repo
+
+- name: Install Node.js
+  ansible.builtin.dnf:
+    name: nodejs
+    state: present
+
+- name: Create app directory
+  ansible.builtin.file:
+    path: /opt/app
+    state: directory
+    owner: ec2-user
+    group: ec2-user
+    mode: "0755"
+
+- name: Deploy package.json
+  ansible.builtin.copy:
+    dest: /opt/app/package.json
+    owner: ec2-user
+    group: ec2-user
+    content: |
+      {
+        "name": "infra-learning-api",
+        "version": "1.0.0",
+        "main": "server.js",
+        "dependencies": {
+          "express": "^4.18.0",
+          "pg": "^8.11.0"
+        }
+      }
+
+- name: Deploy Express server
+  ansible.builtin.template:
+    src: server.js.j2
+    dest: /opt/app/server.js
+    owner: ec2-user
+    group: ec2-user
+    mode: "0644"
+  notify: Restart app
+
+- name: npm install
+  ansible.builtin.command:
+    cmd: npm install --production
+    chdir: /opt/app
+  become_user: ec2-user
+
+- name: Deploy systemd service for Node.js app
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/nodeapp.service
+    content: |
+      [Unit]
+      Description=Node.js App Server
+      After=network.target
+
+      [Service]
+      Type=simple
+      User=ec2-user
+      WorkingDirectory=/opt/app
+      ExecStart=/usr/bin/node server.js
+      Restart=on-failure
+      Environment=NODE_ENV=production
+      Environment=DB_HOST={{ db_private_ip }}
+      Environment=DB_PORT=5432
+      Environment=DB_NAME=appdb
+      Environment=DB_USER=appuser
+      Environment=DB_PASSWORD={{ db_password }}
+
+      [Install]
+      WantedBy=multi-user.target
+  notify: Restart app
+
+- name: Enable and start Node.js app
+  ansible.builtin.systemd:
+    name: nodeapp
+    state: started
+    enabled: true
+    daemon_reload: true

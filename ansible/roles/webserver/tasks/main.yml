@@ -1,0 +1,41 @@
+---
+# ansible/roles/webserver/tasks/main.yml
+# Installs and configures Nginx to serve the status page frontend
+
+- name: Install Nginx
+  ansible.builtin.dnf:
+    name: nginx
+    state: present
+
+- name: Create webroot directory for status page
+  ansible.builtin.file:
+    path: /var/www/statuspage
+    state: directory
+    owner: nginx
+    group: nginx
+    mode: "0755"
+
+- name: Deploy status page frontend (static HTML)
+  ansible.builtin.copy:
+    src: index.html
+    dest: /var/www/statuspage/index.html
+    owner: nginx
+    group: nginx
+    mode: "0644"
+  notify: Reload Nginx
+
+- name: Deploy Nginx config from template
+  ansible.builtin.template:
+    src: nginx.conf.j2
+    dest: /etc/nginx/conf.d/statuspage.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload Nginx
+
+- name: Ensure Nginx is started and enabled on boot
+  ansible.builtin.service:
+    name: nginx
+    state: started
+    enabled: true
+

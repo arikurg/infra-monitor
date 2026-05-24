@@ -1,0 +1,26 @@
+---
+# ansible/playbook.yml
+#
+# Run with:
+#   ansible-playbook -i inventory.ini playbook.yml
+#
+# Or target just one tier:
+#   ansible-playbook -i inventory.ini playbook.yml --limit webservers
+
+- name: Configure web servers
+  hosts: webservers
+  become: true          # sudo
+  roles:
+    - webserver
+
+- name: Configure app servers
+  hosts: appservers
+  become: true
+  roles:
+    - appserver
+
+- name: Configure database servers
+  hosts: dbservers
+  become: true
+  roles:
+    - database
