@@ -3,12 +3,15 @@ terraform/.terraform/
 terraform/.terraform.lock.hcl
 terraform/terraform.tfstate
 terraform/terraform.tfstate.backup
-terraform/terraform.tfvars       # contains your real IP — never commit
+# contains your real IP — never commit
+terraform/terraform.tfvars
 *.tfplan
 
 # Ansible
-ansible/inventory.ini            # contains real IPs — never commit
-ansible/group_vars/dbservers/vault.yml   # encrypted secrets file
+# contains real IPs — never commit
+ansible/inventory.ini
+# encrypted secrets file
+ansible/group_vars/dbservers/vault.yml
 ansible/*.retry
 ansible/__pycache__/
 
