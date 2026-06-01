@@ -162,6 +162,106 @@ Secrets (passwords, API keys) should never be committed to git as plaintext. `an
 
 ---
 
+## Containers + Kubernetes (local kind)
+
+The same 3-tier app also runs as containers on a local Kubernetes cluster. This
+path is independent of AWS — you don't need any cloud resources to use it.
+
+```
+Browser → localhost:8080 → web (Nginx, NodePort)
+                            → app (Node, Deployment + HPA)
+                            → db  (PostgreSQL, StatefulSet + PVC)
+```
+
+### Layout
+
+```
+app/                       ← extracted Node source (plain JS, env-driven)
+web/                       ← static page + nginx config template (envsubst)
+db/init.sql                ← schema (also embedded in k8s/01-config.yaml)
+docker/{app,web}/Dockerfile
+kind/cluster.yaml          ← 1 control-plane + 2 workers, web on localhost:8080
+kind/metrics-server.yaml   ← --kubelet-insecure-tls patch (HPA needs metrics)
+k8s/                       ← namespace, config/secret, db, app (+HPA), web
+.github/workflows/ci-cd.yml
+```
+
+### Prerequisites
+
+| Tool | Install |
+|------|---------|
+| Docker | Docker Desktop |
+| kind | `brew install kind` |
+| kubectl | `brew install kubectl` |
+
+### Run it locally
+
+```bash
+make kind-up      # create the cluster + install metrics-server
+make k8s-up       # build images → load into kind → apply manifests
+open http://localhost:8080
+```
+
+`make k8s-up` builds the images locally and `kind load`s them, so no registry
+login is needed. Manifests use `imagePullPolicy: IfNotPresent`, so the loaded
+images are used as-is.
+
+Inspect and tear down:
+
+```bash
+make k8s-status   # pods, services, HPA
+make kind-down    # delete the whole cluster
+```
+
+### What this demonstrates
+
+- **Rolling updates** — app/web Deployments use `maxSurge:1, maxUnavailable:0`,
+  so a new version rolls out with zero capacity loss. Trigger one with
+  `make docker-build kind-load k8s-deploy` after editing the app.
+- **Liveness/readiness probes** — app/web hit `/health`; db uses `pg_isready`.
+- **Horizontal Pod Autoscaling** — the `app` Deployment scales 2→10 at 60% CPU.
+  Load-test it: `kubectl -n infra-learning run load --image=busybox --restart=Never -- \
+  /bin/sh -c "while true; do wget -q -O- http://app:3000/api/status; done"` then
+  watch `kubectl -n infra-learning get hpa -w`.
+
+### CI/CD (GitHub Actions)
+
+[.github/workflows/ci-cd.yml](.github/workflows/ci-cd.yml) runs three jobs:
+
+1. **validate** (GitHub-hosted) — `kubectl --dry-run=client` on every manifest.
+2. **build** (GitHub-hosted) — builds both images and pushes them to **GHCR**
+   (`ghcr.io/<owner>/infra-learning-{app,web}`, tagged `:latest` and `:<sha>`)
+   on pushes to `main`.
+3. **deploy** (**self-hosted**, option A) — runs on *your* machine (the one with
+   the kind cluster), pulls the `:<sha>` images, `kind load`s them, and rolls
+   them out. Gated to `push` on `main` so fork PRs can't run code on your box.
+
+### Set up the self-hosted runner (one-time)
+
+The deploy job needs a runner on the kind machine, labelled `kind`:
+
+```bash
+# GitHub → repo Settings → Actions → Runners → "New self-hosted runner" (macOS)
+# Follow the shown ./config.sh command, and when prompted for labels add: kind
+# Then start it:
+./run.sh                 # foreground, or `./svc.sh install && ./svc.sh start` for a service
+```
+
+The runner inherits your shell, so `docker`, `kind`, `kubectl`, `make` and your
+kubeconfig (context `kind-infra-learning`) must be available to it.
+
+> **Public-repo safety:** keep repo Settings → Actions → *"Require approval for
+> all external contributors"* enabled. The deploy job is already gated to
+> `push` on `main`, so `pull_request` events from forks never touch the runner.
+
+Manual rollout still works as a fallback:
+
+```bash
+make k8s-deploy TAG=latest
+```
+
+---
+
 ## Learning challenges (try these once it's working)
 
 1. **Add a load balancer**: Create a second web server in a different availability zone and put an AWS ALB in front of both.

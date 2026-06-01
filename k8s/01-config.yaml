@@ -1,0 +1,44 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: infra-learning
+data:
+  # App tier
+  DB_HOST: db          # headless Service name for postgres
+  DB_PORT: "5432"
+  DB_NAME: appdb
+  DB_USER: appuser
+  WEB_HOST: web        # web Service name, used by the Nginx round-trip check
+  PORT: "3000"
+  # Web tier — nginx envsubst targets
+  APP_HOST: app        # app Service name
+  APP_PORT: "3000"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: db-secret
+  namespace: infra-learning
+type: Opaque
+stringData:
+  # DEV ONLY. Replace before any real use, e.g.:
+  #   kubectl -n infra-learning create secret generic db-secret \
+  #     --from-literal=DB_PASSWORD='...' --dry-run=client -o yaml | kubectl apply -f -
+  DB_PASSWORD: changeme-dev-password
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: db-init
+  namespace: infra-learning
+data:
+  init.sql: |
+    CREATE TABLE IF NOT EXISTS incidents (
+        id          SERIAL PRIMARY KEY,
+        service     VARCHAR(50)  NOT NULL,
+        status      VARCHAR(20)  NOT NULL,
+        latency_ms  INTEGER,
+        detail      TEXT,
+        checked_at  TIMESTAMPTZ  DEFAULT NOW()
+    );

@@ -78,6 +78,61 @@ sync-ips:
 	@chmod +x scripts/redeploy.sh && ./scripts/redeploy.sh --ips-only
 
 
+# ─── Docker + Kubernetes (kind) ─────────────────────────────────────────────────
+
+GHCR_OWNER ?= akhurgin3
+APP_IMAGE   = ghcr.io/$(GHCR_OWNER)/infra-learning-app
+WEB_IMAGE   = ghcr.io/$(GHCR_OWNER)/infra-learning-web
+TAG        ?= latest
+KIND_CLUSTER = infra-learning
+
+.PHONY: docker-build
+docker-build:
+	@echo "==> Building tier images (context = repo root)..."
+	docker build -f docker/app/Dockerfile -t $(APP_IMAGE):$(TAG) .
+	docker build -f docker/web/Dockerfile -t $(WEB_IMAGE):$(TAG) .
+
+.PHONY: kind-up
+kind-up:
+	@echo "==> Creating kind cluster + metrics-server (needed for HPA)..."
+	kind create cluster --config kind/cluster.yaml
+	kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+	kubectl -n kube-system patch deployment metrics-server --type=strategic --patch-file kind/metrics-server.yaml
+
+.PHONY: kind-down
+kind-down:
+	@echo "==> Deleting kind cluster..."
+	kind delete cluster --name $(KIND_CLUSTER)
+
+.PHONY: kind-load
+kind-load:
+	@echo "==> Loading images into kind (no registry pull needed)..."
+	kind load docker-image $(APP_IMAGE):$(TAG) --name $(KIND_CLUSTER)
+	kind load docker-image $(WEB_IMAGE):$(TAG) --name $(KIND_CLUSTER)
+
+.PHONY: k8s-deploy
+k8s-deploy:
+	@echo "==> Applying manifests and waiting for rollout..."
+	kubectl apply -f k8s/
+	kubectl -n infra-learning set image deployment/app app=$(APP_IMAGE):$(TAG)
+	kubectl -n infra-learning set image deployment/web web=$(WEB_IMAGE):$(TAG)
+	kubectl -n infra-learning rollout status statefulset/db
+	kubectl -n infra-learning rollout status deployment/app
+	kubectl -n infra-learning rollout status deployment/web
+	@echo "==> Visit: http://localhost:8080"
+
+.PHONY: k8s-status
+k8s-status:
+	kubectl -n infra-learning get pods,svc,hpa,statefulset
+
+.PHONY: k8s-delete
+k8s-delete:
+	kubectl delete namespace infra-learning
+
+# Full local loop: build → load into kind → deploy. No GHCR needed.
+.PHONY: k8s-up
+k8s-up: docker-build kind-load k8s-deploy
+
 # ─── Full lifecycle ────────────────────────────────────────────────────────────
 
 .PHONY: deploy
@@ -106,6 +161,16 @@ help:
 	@echo "    make provision-app — app tier only"
 	@echo "    make provision-db  — db tier only"
 	@echo "    make dry-run       — check mode, no changes"
+	@echo ""
+	@echo "  Docker + Kubernetes (kind):"
+	@echo "    make docker-build  — build app + web images"
+	@echo "    make kind-up       — create kind cluster + metrics-server"
+	@echo "    make kind-load     — load built images into kind"
+	@echo "    make k8s-deploy    — apply manifests + wait for rollout"
+	@echo "    make k8s-up        — build + load + deploy (full local loop)"
+	@echo "    make k8s-status    — show pods/svc/hpa"
+	@echo "    make k8s-delete    — delete the namespace"
+	@echo "    make kind-down     — delete the kind cluster"
 	@echo ""
 	@echo "  Combined:"
 	@echo "    make deploy        — tf-apply + provision"

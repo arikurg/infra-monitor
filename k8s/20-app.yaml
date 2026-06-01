@@ -1,0 +1,76 @@
+# App tier — Node status monitor. This is the tier the HPA scales.
+apiVersion: v1
+kind: Service
+metadata:
+  name: app
+  namespace: infra-learning
+spec:
+  selector:
+    app: app
+  ports:
+    - port: 3000
+      targetPort: 3000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app
+  namespace: infra-learning
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: app
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0      # keep full capacity during rollouts
+  template:
+    metadata:
+      labels:
+        app: app
+    spec:
+      containers:
+        - name: app
+          image: ghcr.io/akhurgin3/infra-learning-app:latest
+          imagePullPolicy: IfNotPresent   # use kind-loaded image if present, else pull from GHCR
+          ports:
+            - containerPort: 3000
+          envFrom:
+            - configMapRef: { name: app-config }
+          env:
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: db-secret, key: DB_PASSWORD }
+          livenessProbe:
+            httpGet: { path: /health, port: 3000 }
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet: { path: /health, port: 3000 }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 100m, memory: 64Mi }   # request is the HPA baseline
+            limits:   { cpu: 250m, memory: 128Mi }
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: app
+  namespace: infra-learning
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: app
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 60   # % of the 100m CPU request

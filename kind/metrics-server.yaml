@@ -1,0 +1,23 @@
+# kind/metrics-server.yaml
+# Strategic-merge PATCH (not a standalone manifest) applied on top of the
+# upstream metrics-server Deployment. HPA needs metrics-server to read pod CPU,
+# but it scrapes kubelets over TLS and kind uses self-signed certs — so we add
+# --kubelet-insecure-tls. Applied via the Makefile `kind-up` target:
+#
+#   kubectl -n kube-system patch deployment metrics-server \
+#     --type=strategic --patch-file kind/metrics-server.yaml
+#
+# The args list mirrors the upstream defaults so the strategic merge replaces it
+# wholesale (idempotent — re-running adds no duplicate flags).
+spec:
+  template:
+    spec:
+      containers:
+        - name: metrics-server
+          args:
+            - --cert-dir=/tmp
+            - --secure-port=10250
+            - --kubelet-preferred-address-types=InternalIP,ExternalIP,Hostname
+            - --kubelet-use-node-status-port
+            - --metric-resolution=15s
+            - --kubelet-insecure-tls

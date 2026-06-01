@@ -1,0 +1,33 @@
+# web/default.conf.template
+# The official nginx image runs envsubst over this file at container start,
+# writing the result to /etc/nginx/conf.d/default.conf. ${APP_HOST}/${APP_PORT}
+# come from the container env (k8s ConfigMap), so no IP is ever hardcoded.
+
+server {
+    listen 80;
+    server_name _;
+
+    root  /usr/share/nginx/html;
+    index index.html;
+
+    # All /api/* requests proxy through to the Node.js app tier
+    location /api/ {
+        proxy_pass         http://${APP_HOST}:${APP_PORT};
+        proxy_http_version 1.1;
+        proxy_set_header   Host            $host;
+        proxy_set_header   X-Real-IP       $remote_addr;
+        proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_intercept_errors off;
+    }
+
+    # Static files — served directly by Nginx
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Health check endpoint — Nginx answers this itself (used by k8s probes)
+    location /health {
+        return 200 'web-ok\n';
+        add_header Content-Type text/plain;
+    }
+}

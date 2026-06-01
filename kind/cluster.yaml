@@ -1,0 +1,14 @@
+# kind/cluster.yaml
+# One control-plane + two workers so the scheduler can spread app replicas
+# (HPA) across nodes. extraPortMappings exposes the web NodePort on localhost.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: infra-learning
+nodes:
+  - role: control-plane
+    extraPortMappings:
+      - containerPort: 30080   # web Service nodePort
+        hostPort: 8080
+        protocol: TCP
+  - role: worker
+  - role: worker
