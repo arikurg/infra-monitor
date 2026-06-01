@@ -85,6 +85,11 @@ APP_IMAGE   = ghcr.io/$(GHCR_OWNER)/infra-learning-app
 WEB_IMAGE   = ghcr.io/$(GHCR_OWNER)/infra-learning-web
 TAG        ?= latest
 KIND_CLUSTER = infra-learning
+# Host platform for kind-load. Multi-arch images pulled from GHCR are stored
+# locally as an index missing the other arch's blobs, so `kind load docker-image`
+# (which imports --all-platforms) fails. Saving just the host platform to an
+# archive sidesteps that.
+PLATFORM    ?= linux/$(shell docker version --format '{{.Server.Arch}}')
 
 .PHONY: docker-build
 docker-build:
@@ -106,9 +111,13 @@ kind-down:
 
 .PHONY: kind-load
 kind-load:
-	@echo "==> Loading images into kind (no registry pull needed)..."
-	kind load docker-image $(APP_IMAGE):$(TAG) --name $(KIND_CLUSTER)
-	kind load docker-image $(WEB_IMAGE):$(TAG) --name $(KIND_CLUSTER)
+	@echo "==> Loading images into kind ($(PLATFORM) archive, no registry pull needed)..."
+	@for img in $(APP_IMAGE):$(TAG) $(WEB_IMAGE):$(TAG); do \
+	  tar=$$(mktemp).tar; \
+	  docker save --platform $(PLATFORM) -o $$tar $$img; \
+	  kind load image-archive $$tar --name $(KIND_CLUSTER); \
+	  rm -f $$tar; \
+	done
 
 .PHONY: k8s-deploy
 k8s-deploy:
