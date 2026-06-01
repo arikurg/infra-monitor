@@ -25,14 +25,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install kubectl
-        uses: azure/setup-kubectl@v4
-      - name: Validate Kubernetes manifests
+      # kubeconform validates manifests against the Kubernetes JSON schemas
+      # offline. (kubectl --dry-run=client can't be used here: it downloads the
+      # OpenAPI schema from a live cluster API, which a CI runner doesn't have.)
+      - name: Validate Kubernetes manifests (offline)
         run: |
-          for f in k8s/*.yaml; do
-            echo "==> $f"
-            kubectl apply -f "$f" --dry-run=client
-          done
+          curl -sSL https://github.com/yannh/kubeconform/releases/download/v0.7.0/kubeconform-linux-amd64.tar.gz | tar -xz
+          ./kubeconform -strict -summary k8s/
 
   build:
     runs-on: ubuntu-latest
