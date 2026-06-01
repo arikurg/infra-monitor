@@ -91,7 +91,11 @@ jobs:
 
       - name: Log in to GHCR
         run: |
+          # Write a config with credsStore disabled so docker stores the token
+          # as plaintext base64 here, not via the macOS keychain helper (which
+          # a headless launchd runner can't unlock → error -25308).
           mkdir -p "$DOCKER_CONFIG"
+          echo '{"auths":{},"credsStore":""}' > "$DOCKER_CONFIG/config.json"
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
       - name: Pull images, load into kind, and roll out (tag = commit SHA)
