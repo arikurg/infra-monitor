@@ -85,7 +85,7 @@ jobs:
       # here instead of the macOS keychain. The launchd-managed runner is
       # headless and can't unlock the keychain ("User interaction is not
       # allowed. (-25308)"), which fails the login otherwise.
-      DOCKER_CONFIG: ${{ runner.temp }}/docker-config
+      DOCKER_CONFIG: ${{ github.workspace }}/.docker-config
     steps:
       - uses: actions/checkout@v4
 
