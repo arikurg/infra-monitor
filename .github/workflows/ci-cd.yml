@@ -90,13 +90,18 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Log in to GHCR
+        env:
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Write a config with credsStore disabled so docker stores the token
-          # as plaintext base64 here, not via the macOS keychain helper (which
-          # a headless launchd runner can't unlock → error -25308).
+          # Don't use `docker login`: on a macOS host the CLI rewrites credsStore
+          # to "osxkeychain" and stores the token there, which a headless launchd
+          # runner can't unlock (error -25308). Write the auth straight into a
+          # job-local config.json instead — `docker pull` reads plaintext auths
+          # without ever invoking the keychain helper.
           mkdir -p "$DOCKER_CONFIG"
-          echo '{"auths":{},"credsStore":""}' > "$DOCKER_CONFIG/config.json"
-          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+          AUTH=$(printf '%s:%s' "$GHCR_USER" "$GHCR_TOKEN" | base64 | tr -d '\n')
+          printf '{"auths":{"ghcr.io":{"auth":"%s"}}}' "$AUTH" > "$DOCKER_CONFIG/config.json"
 
       - name: Pull images, load into kind, and roll out (tag = commit SHA)
         env:
