@@ -80,11 +80,19 @@ jobs:
     permissions:
       contents: read
       packages: read
+    env:
+      # Use a job-local docker config so `docker login` writes plaintext creds
+      # here instead of the macOS keychain. The launchd-managed runner is
+      # headless and can't unlock the keychain ("User interaction is not
+      # allowed. (-25308)"), which fails the login otherwise.
+      DOCKER_CONFIG: ${{ runner.temp }}/docker-config
     steps:
       - uses: actions/checkout@v4
 
       - name: Log in to GHCR
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+        run: |
+          mkdir -p "$DOCKER_CONFIG"
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
       - name: Pull images, load into kind, and roll out (tag = commit SHA)
         env:
