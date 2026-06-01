@@ -33,7 +33,7 @@ spec:
     spec:
       containers:
         - name: app
-          image: ghcr.io/akhurgin3/infra-learning-app:latest
+          image: ghcr.io/arikurg/infra-learning-app:latest
           imagePullPolicy: IfNotPresent   # use kind-loaded image if present, else pull from GHCR
           ports:
             - containerPort: 3000

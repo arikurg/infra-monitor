@@ -80,7 +80,7 @@ sync-ips:
 
 # ─── Docker + Kubernetes (kind) ─────────────────────────────────────────────────
 
-GHCR_OWNER ?= akhurgin3
+GHCR_OWNER ?= arikurg
 APP_IMAGE   = ghcr.io/$(GHCR_OWNER)/infra-learning-app
 WEB_IMAGE   = ghcr.io/$(GHCR_OWNER)/infra-learning-web
 TAG        ?= latest

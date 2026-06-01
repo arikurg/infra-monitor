@@ -36,7 +36,7 @@ spec:
     spec:
       containers:
         - name: web
-          image: ghcr.io/akhurgin3/infra-learning-web:latest
+          image: ghcr.io/arikurg/infra-learning-web:latest
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 80

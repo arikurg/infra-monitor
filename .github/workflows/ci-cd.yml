@@ -89,6 +89,9 @@ jobs:
       - name: Pull images, load into kind, and roll out (tag = commit SHA)
         env:
           TAG: ${{ github.sha }}
+          # Make targets read GHCR_OWNER; pass the real repo owner so the
+          # image names match what `build` pushed (works for forks too).
+          GHCR_OWNER: ${{ github.repository_owner }}
         run: |
           docker pull ${{ env.IMAGE_PREFIX }}-app:$TAG
           docker pull ${{ env.IMAGE_PREFIX }}-web:$TAG
