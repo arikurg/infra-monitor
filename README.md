@@ -1,10 +1,19 @@
 # infra-learning
 
-A 3-tier web application infrastructure built with **Terraform** (provision) and **Ansible** (configure) on AWS free tier. Built to learn infrastructure skills for DevOps internships.
+A 3-tier web application (Nginx → Node.js → PostgreSQL) you can deploy **two
+ways**, built to learn infrastructure skills for DevOps internships:
+
+- **On AWS** with **Terraform** (provision) and **Ansible** (configure) — the
+  cloud path, below.
+- **Locally on Kubernetes** with **Docker** + **kind**, plus a **GitHub Actions**
+  CI/CD pipeline — see [Containers + Kubernetes](#containers--kubernetes-local-kind).
 
 ```
-Internet → Nginx (web) → Node.js (app) → PostgreSQL (db)
-           public subnet   private subnet   db subnet
+AWS:   Internet → Nginx (web) → Node.js (app) → PostgreSQL (db)
+                  public subnet   private subnet   db subnet
+
+kind:  localhost → web Deployment → app Deployment (+HPA) → db StatefulSet
+                   (NodePort)        (rolling updates)        (PVC)
 ```
 
 ## What you'll learn
@@ -14,6 +23,11 @@ Internet → Nginx (web) → Node.js (app) → PostgreSQL (db)
 - **Networking**: public vs private subnets, route tables, internet gateways
 - **Security**: least-privilege security groups, SSH bastion pattern, secrets management
 - **Linux**: systemd services, firewalld, PostgreSQL setup
+- **Docker**: multi-tier images, layer caching, env-driven config, non-root containers
+- **Kubernetes**: Deployments, StatefulSets, Services, ConfigMaps/Secrets, probes,
+  rolling updates, Horizontal Pod Autoscaling (on a local kind cluster)
+- **CI/CD**: GitHub Actions building/pushing images to GHCR and deploying via a
+  self-hosted runner
 
 ---
 
@@ -120,24 +134,36 @@ infra-learning/
 │   ├── instances.tf            ← EC2 instances
 │   └── outputs.tf              ← IPs, inventory snippet
 │
-└── ansible/
-    ├── ansible.cfg             ← Ansible settings
-    ├── inventory.ini           ← server IPs (gitignored)
-    ├── playbook.yml            ← main playbook
-    └── roles/
-        ├── webserver/
-        │   ├── tasks/main.yml      ← install + config Nginx
-        │   ├── handlers/main.yml   ← reload Nginx on change
-        │   └── templates/
-        │       └── nginx.conf.j2   ← reverse proxy config
-        ├── appserver/
-        │   ├── tasks/main.yml      ← install Node.js, deploy app
-        │   ├── handlers/main.yml   ← restart app on change
-        │   └── templates/
-        │       └── server.js.j2    ← Express API
-        └── database/
-            ├── tasks/main.yml      ← install PostgreSQL, seed data
-            └── handlers/main.yml   ← restart postgres on change
+├── ansible/
+│   ├── ansible.cfg             ← Ansible settings
+│   ├── inventory.ini           ← server IPs (gitignored)
+│   ├── playbook.yml            ← main playbook
+│   └── roles/
+│       ├── webserver/
+│       │   ├── tasks/main.yml      ← install + config Nginx
+│       │   ├── handlers/main.yml   ← reload Nginx on change
+│       │   └── templates/
+│       │       └── nginx.conf.j2   ← reverse proxy config
+│       ├── appserver/
+│       │   ├── tasks/main.yml      ← install Node.js, deploy app
+│       │   ├── handlers/main.yml   ← restart app on change
+│       │   └── templates/
+│       │       └── server.js.j2    ← Express API
+│       └── database/
+│           ├── tasks/main.yml      ← install PostgreSQL, seed data
+│           └── handlers/main.yml   ← restart postgres on change
+│
+│   ── container / Kubernetes path ──
+│
+├── app/                        ← Node source (plain JS, env-driven)
+├── web/                        ← static page + nginx config template (envsubst)
+├── db/init.sql                 ← Postgres schema
+├── docker/{app,web}/Dockerfile ← per-tier image builds
+├── kind/
+│   ├── cluster.yaml            ← kind cluster (web on localhost:8080)
+│   └── metrics-server.yaml     ← --kubelet-insecure-tls patch (for HPA)
+├── k8s/                        ← namespace, config/secret, db, app (+HPA), web
+└── .github/workflows/ci-cd.yml ← validate → build/push to GHCR → deploy
 ```
 
 ---
