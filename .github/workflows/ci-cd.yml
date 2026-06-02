@@ -34,7 +34,10 @@ jobs:
           ./kubeconform -strict -summary k8s/
 
   build:
-    runs-on: ubuntu-latest
+    # Native arm64 hosted runner (free for public repos). The only consumer of
+    # these images is the arm64 kind cluster, so we build a single native arch —
+    # no QEMU emulation, much faster than a cross-build on an amd64 runner.
+    runs-on: ubuntu-24.04-arm
     needs: validate
     # Only push on a real push to main; PRs build but don't push.
     permissions:
@@ -45,10 +48,6 @@ jobs:
         tier: [app, web]
     steps:
       - uses: actions/checkout@v4
-
-      # QEMU lets the amd64 GitHub runner cross-build the arm64 image.
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -66,9 +65,8 @@ jobs:
         with:
           context: .
           file: docker/${{ matrix.tier }}/Dockerfile
-          # Build for both arches so the image runs on amd64 CI hosts and the
-          # arm64 (Apple Silicon) self-hosted deploy runner alike.
-          platforms: linux/amd64,linux/arm64
+          # Single native arch — matches the arm64 kind cluster that consumes it.
+          platforms: linux/arm64
           push: ${{ github.event_name == 'push' }}
           tags: |
             ${{ env.IMAGE_PREFIX }}-${{ matrix.tier }}:latest
