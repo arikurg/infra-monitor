@@ -121,3 +121,6 @@ jobs:
           kubectl config use-context kind-infra-learning
           make kind-load  TAG="$TAG"   # load the pulled images into kind nodes
           make k8s-deploy TAG="$TAG"   # apply manifests, set image to this SHA, wait for rollout
+
+      - name: Smoke test the deployment
+        run: python3 scripts/smoke_test.py
