@@ -180,6 +180,41 @@
       font-variant-numeric: tabular-nums;
     }
 
+    /* ── History ── */
+    .history { margin-bottom: 32px; }
+
+    .history-title {
+      font-size: 13px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      color: var(--muted);
+      margin-bottom: 12px;
+    }
+
+    .history-list { display: flex; flex-direction: column; gap: 6px; }
+
+    .history-row {
+      display: grid;
+      grid-template-columns: auto 1fr auto auto;
+      gap: 12px;
+      align-items: center;
+      font-size: 13px;
+      padding: 8px 14px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .hist-dot  { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .hist-dot.up   { background: var(--green); }
+    .hist-dot.down { background: var(--red);   }
+    .hist-svc  { font-weight: 500; }
+    .hist-lat  { color: var(--muted); }
+    .hist-time { color: var(--muted); font-family: 'SF Mono', 'Fira Code', monospace; }
+    .history-empty { font-size: 13px; color: var(--muted); }
+
     /* ── Error state ── */
     .error-banner {
       background: var(--red-bg);
@@ -240,6 +275,13 @@
         <span class="latency">—</span>
       </div>
       <span class="service-detail">waiting…</span>
+    </div>
+  </div>
+
+  <div class="history" id="history-section">
+    <h2 class="history-title">Recent checks</h2>
+    <div class="history-list" id="history-list">
+      <p class="history-empty">Loading history…</p>
     </div>
   </div>
 
@@ -320,6 +362,40 @@
     }
   }
 
+  async function fetchHistory() {
+    const list = document.getElementById('history-list');
+    try {
+      const res  = await fetch('/api/history?limit=15');
+      const data = await res.json();
+
+      if (!data.incidents || data.incidents.length === 0) {
+        list.innerHTML = '<p class="history-empty">No history recorded yet…</p>';
+        return;
+      }
+
+      list.innerHTML = '';
+      data.incidents.forEach(row => {
+        const up = row.status === 'up';
+        const el = document.createElement('div');
+        el.className = 'history-row';
+        el.innerHTML = `
+          <span class="hist-dot ${up ? 'up' : 'down'}"></span>
+          <span class="hist-svc">${row.service}</span>
+          <span class="hist-lat">${row.latency_ms != null ? row.latency_ms + 'ms' : '—'}</span>
+          <span class="hist-time">${fmtTime(row.checked_at)}</span>
+        `;
+        list.appendChild(el);
+      });
+    } catch (err) {
+      list.innerHTML = '<p class="history-empty">History unavailable</p>';
+    }
+  }
+
+  function refresh() {
+    fetchHistory();
+    return fetchStatus();
+  }
+
   function startCountdown() {
     clearInterval(timer);
     countdown = POLL_INTERVAL / 1000;
@@ -330,13 +406,13 @@
       document.getElementById('countdown').textContent = countdown;
       if (countdown <= 0) {
         clearInterval(timer);
-        fetchStatus().then(startCountdown);
+        refresh().then(startCountdown);
       }
     }, 1000);
   }
 
   // Initial load
-  fetchStatus().then(startCountdown);
+  refresh().then(startCountdown);
 </script>
 </body>
 </html>

@@ -110,28 +110,80 @@ function fmtUptime(sec) {
   return `${s}s`;
 }
 
-// ─── Routes ───────────────────────────────────────────────────────────────────
+// ─── Aggregation + persistence ──────────────────────────────────────────────────
 
-// Main status endpoint — runs all three checks in parallel
-app.get('/api/status', async (_req, res) => {
+// How often the background sampler records a snapshot into the DB.
+const SAMPLE_INTERVAL_MS = parseInt(process.env.SAMPLE_INTERVAL_MS || '30000');
+
+// Run all three checks in parallel; returns them tagged with name/tier.
+async function runChecks() {
   const [nginx, self_, db] = await Promise.all([
     checkNginx(),
     checkSelf(),
     checkDatabase(),
   ]);
+  return [
+    { name: 'Nginx',      tier: 'web', ...nginx },
+    { name: 'Node.js',    tier: 'app', ...self_ },
+    { name: 'PostgreSQL', tier: 'db',  ...db    },
+  ];
+}
 
-  const allOk     = nginx.ok && self_.ok && db.ok;
-  const checkedAt = new Date().toISOString();
+// Persist one row per service into the incidents table in a single INSERT.
+// checked_at uses the column's DEFAULT NOW(), so all rows share one timestamp.
+async function persistChecks(services) {
+  const tuples = [];
+  const values = [];
+  services.forEach((s, i) => {
+    const b = i * 4;
+    tuples.push(`($${b + 1}, $${b + 2}, $${b + 3}, $${b + 4})`);
+    values.push(s.name, s.ok ? 'up' : 'down', s.latencyMs, s.detail || s.error || null);
+  });
+  await pool.query(
+    `INSERT INTO incidents (service, status, latency_ms, detail) VALUES ${tuples.join(', ')}`,
+    values,
+  );
+}
+
+// Background sampler — records check history on a fixed cadence so data accrues
+// even with no traffic. Failures are logged, never fatal (retried next tick).
+async function sampleAndStore() {
+  try {
+    await persistChecks(await runChecks());
+  } catch (err) {
+    console.error('sample failed:', err.message);
+  }
+}
+
+// ─── Routes ───────────────────────────────────────────────────────────────────
+
+// Main status endpoint — live snapshot of all three tiers (read-only).
+app.get('/api/status', async (_req, res) => {
+  const services  = await runChecks();
+  const allOk     = services.every((s) => s.ok);
 
   res.status(allOk ? 200 : 503).json({
     overall:   allOk ? 'healthy' : 'degraded',
-    checkedAt,
-    services: [
-      { name: 'Nginx',      tier: 'web', ...nginx  },
-      { name: 'Node.js',    tier: 'app', ...self_  },
-      { name: 'PostgreSQL', tier: 'db',  ...db     },
-    ],
+    checkedAt: new Date().toISOString(),
+    services,
   });
+});
+
+// History endpoint — recent persisted checks, newest first.
+app.get('/api/history', async (req, res) => {
+  const limit = Math.min(Math.max(parseInt(req.query.limit || '50') || 50, 1), 500);
+  try {
+    const { rows } = await pool.query(
+      `SELECT service, status, latency_ms, detail, checked_at
+         FROM incidents
+        ORDER BY checked_at DESC, id DESC
+        LIMIT $1`,
+      [limit],
+    );
+    res.json({ count: rows.length, incidents: rows });
+  } catch (err) {
+    res.status(503).json({ error: err.message });
+  }
 });
 
 // Lightweight liveness/readiness probe (used by Nginx and by k8s probes)
@@ -142,4 +194,9 @@ app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 app.listen(port, '0.0.0.0', () => {
   console.log(`Status monitor listening on :${port}`);
   console.log(`DB host: ${process.env.DB_HOST} · web host: ${WEB_HOST}`);
+  console.log(`Sampling check history every ${SAMPLE_INTERVAL_MS}ms`);
 });
+
+// Background sampler: take one snapshot now, then on a fixed cadence.
+sampleAndStore();
+setInterval(sampleAndStore, SAMPLE_INTERVAL_MS);

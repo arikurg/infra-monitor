@@ -249,6 +249,15 @@ make kind-down    # delete the whole cluster
   Load-test it: `kubectl -n infra-learning run load --image=busybox --restart=Never -- \
   /bin/sh -c "while true; do wget -q -O- http://app:3000/api/status; done"` then
   watch `kubectl -n infra-learning get hpa -w`.
+- **Persistent state (StatefulSet + PVC)** — the app records each health check into
+  the `incidents` table on a fixed cadence (`SAMPLE_INTERVAL_MS`, default 30s) and
+  serves it at `GET /api/history`. The history **survives pod restarts** — delete
+  `db-0` and the rows are still there, because the StatefulSet re-attaches the same
+  PVC. That's the difference between a StatefulSet and a stateless Deployment.
+  > Note: with `replicas: 2`, *both* app pods sample, so you get ~2 rows per service
+  > per interval. In production you'd move sampling to a single Kubernetes CronJob
+  > (or use leader election) — a good illustration of coordinating scheduled work
+  > across stateless replicas.
 
 ### CI/CD (GitHub Actions)
 

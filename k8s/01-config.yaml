@@ -11,6 +11,7 @@ data:
   DB_USER: appuser
   WEB_HOST: web        # web Service name, used by the Nginx round-trip check
   PORT: "3000"
+  SAMPLE_INTERVAL_MS: "30000"   # how often the app records a check snapshot to the DB
   # Web tier — nginx envsubst targets
   APP_HOST: app        # app Service name
   APP_PORT: "3000"
